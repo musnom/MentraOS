@@ -59,8 +59,11 @@ public final class AeStateMachine {
             // is "keep waiting", not evidence that AE left convergence — don't touch the streak.
             return;
         }
+        // FLASH_REQUIRED is AE_MODE_ON's "converged but too dark w/o flash": exposure is at its
+        // limit and won't change, so it settles like CONVERGED (Mentra Live has no flash).
         boolean converged = aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED
-                || aeState == CaptureResult.CONTROL_AE_STATE_LOCKED;
+                || aeState == CaptureResult.CONTROL_AE_STATE_LOCKED
+                || aeState == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED;
         if (!converged) {
             // AE regressed (e.g. scene change mid-wait): restart the stability streak, but keep
             // firstConvergedNs so the stabilization cap still bounds this wait at the historical
@@ -218,8 +221,11 @@ public final class AeStateMachine {
             }
             return AeRepeatCaptureDecision.CONTINUE_WAITING_FOR_LOCK;
         }
+        // Same converged set as noteRepeatingFrame: dark scenes report FLASH_REQUIRED, never
+        // CONVERGED, and would otherwise always wait out AE_WAIT_MAX_NS.
         boolean isAeConverged = (aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED
-                || aeState == CaptureResult.CONTROL_AE_STATE_LOCKED);
+                || aeState == CaptureResult.CONTROL_AE_STATE_LOCKED
+                || aeState == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED);
         if (isAeConverged) {
             if (USE_IMMEDIATE_CAPTURE_ON_CONVERGENCE) {
                 if (stableConvergedFrames >= STABLE_FRAMES_REQUIRED

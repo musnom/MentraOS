@@ -94,6 +94,23 @@ public class AeStateMachineTest {
     }
 
     @Test
+    public void evaluate_flashRequiredStableFrames_capturesNow() {
+        // Dark scene: AE_MODE_ON reports FLASH_REQUIRED (not CONVERGED) at the exposure limit.
+        assertThat(AeStateMachine.evaluateRepeatingRequestAeStep(
+                true, false, CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED, 0L,
+                AeStateMachine.STABLE_FRAMES_REQUIRED, 0L))
+                .isEqualTo(AeStateMachine.AeRepeatCaptureDecision.CAPTURE_NOW_STABLE);
+    }
+
+    @Test
+    public void evaluate_flashRequiredNotYetStable_continuesWaitingForStability() {
+        assertThat(AeStateMachine.evaluateRepeatingRequestAeStep(
+                true, false, CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED, 0L,
+                AeStateMachine.STABLE_FRAMES_REQUIRED - 1, 0L))
+                .isEqualTo(AeStateMachine.AeRepeatCaptureDecision.CONTINUE_WAITING_FOR_STABILITY);
+    }
+
+    @Test
     public void evaluate_notConverged_returnsContinueConvergence() {
         assertThat(AeStateMachine.evaluateRepeatingRequestAeStep(
                 true, false, CaptureResult.CONTROL_AE_STATE_SEARCHING, 0L, 0, 0L))
@@ -112,6 +129,20 @@ public class AeStateMachineTest {
         sm.noteRepeatingFrame(CaptureResult.CONTROL_AE_STATE_CONVERGED, 25_200_000L, 400);
         assertThat(sm.stableConvergedFrames()).isEqualTo(3);
         assertThat(sm.nsSinceFirstConverged()).isGreaterThan(0L);
+    }
+
+    @Test
+    public void noteRepeatingFrame_flashRequiredCountsStableFrames() {
+        // Exposure pinned at the limit (100ms) with ISO wobbling <5%: settled, so the streak
+        // builds and the stabilization cap starts — instead of waiting for the AE timeout.
+        AeStateMachine sm = new AeStateMachine();
+        sm.beginWaitingForAe();
+
+        sm.noteRepeatingFrame(CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED, 100_000_000L, 3846);
+        sm.noteRepeatingFrame(CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED, 100_000_000L, 3888);
+        sm.noteRepeatingFrame(CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED, 100_000_000L, 3888);
+        assertThat(sm.stableConvergedFrames()).isEqualTo(3);
+        assertThat(sm.hasSeenAeConvergence()).isTrue();
     }
 
     @Test
